@@ -1,0 +1,185 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Creates the File Router Workflow"
+Metadata:
+  ProjectName:    "@ProjectName@"
+  ProjectGroup:   "@ProjectGroup@"
+  ProjectVersion: "@ProjectVersion@"
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+    - Label:
+        default: "Naming"
+      Parameters:
+        - "EnvName"
+        - "ParametersPath"
+    - Label:
+        default: "Function Arns"
+      Parameters:
+        - "WorkflowTrackingFunctionArn"
+    - Label:
+        default: "IAM Roles"
+      Parameters:
+        - "WorkflowExecutionRole"
+    - Label:
+        default: "ParameterStore"
+      Parameters:
+        - "ParametersPath"
+Parameters:
+  EnvName:
+    Description: "The env display name e.g. Dev, QA to be prefixed with the resource name to make them unique"
+    Type: "String"
+  Environment:
+    Description: "The env display name in small e.g. dev, qa to be prefixed with the dynamo DB tables name  to make them unique"
+    Type: "String"
+  ParametersPath:
+    Description: "The parameter store path used to get and set parameters.  Recommended format /<env>/<app>/aws/<vpc name>"
+    Type: "String"
+    Default: "/dev/erps/01"
+  HostedZoneDomainName:
+    Description: "The domain name for the hosted zone"
+    Type: "String"
+    Default: "erpsdev.ca"
+  BuildNumber:
+    Description: "Jenkins job build number"
+    Type: "Number"
+  TimeoutSeconds:
+    Description: "Timeout in seconds"
+    Type: "Number"
+    Default: 300
+  WorkflowTrackingFunctionArn:
+    Description: "The Workflow Tracking Function arn"
+    Type: "AWS::SSM::Parameter::Value<String>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/lambda/workflow-tracking-function"
+  FileRouterBatchArn:
+    Description: "The File Router batch task arn"
+    Type: "AWS::SSM::Parameter::Value<String>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/fargate/task/file-router-batch"
+  FileRouterBatchName:
+    Description: "The File Router batch name"
+    Type: "String"
+    Default: "dev-erps-01-file-router-batch" 
+  SftpHost:
+    Description: "The Sftp hostname"
+    Type: "String"
+  SftpUser:
+    Description: "The Sftp username"
+    Type: "String"
+  SftpPort:
+    Description: "The Sftp port number"
+    Type: "String"
+  FargateClusterId:
+    Description: "The fargate cluster logical id "
+    Type: "AWS::SSM::Parameter::Value<String>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/fargate/cluster-id"
+  FargateSubnetId:
+    Description: "The fargate subnet id "
+    Type: "AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/vpc/private-subnets"
+  FargateSecurityGroupId:
+    Description: "The fargate security group id "
+    Type: "AWS::SSM::Parameter::Value<String>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/security-group/fargate-task"
+  BatchOutputS3Bucket:
+    Description: "The batch-output s3 bucket"
+    Type: "AWS::SSM::Parameter::Value<String>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/s3/batch-output/bucket-name"  
+  WorkflowExecutionRole:
+    Description: "The workflow execution role arn"
+    Type: "AWS::SSM::Parameter::Value<String>"
+    ConstraintDescription: "Must select a valid parameter store key"
+    Default: "/dev/erps/01/aws/lambda/iam/workflow-execution-role"
+  TimeToLiveDays:
+    Description: "Time To Live days for all dynamo db tables"
+    Type: "Number"
+    Default: 7
+  RootLogLevel:
+    Description: "Log Level of root mentioned in application.yaml"
+    Type: "String"
+  ErpsLogLevel:
+    Description: "Log Level of xray mentioned in application.yaml"
+    Type: "String"
+  SubvolPrefix:
+    Description: "Subvol Prefix Value"
+    Type: "String"
+  HeartbeatTime:
+    Description: "value for field HeartbeatSeconds in milliseconds"
+    Type: "Number"
+    Default: 300
+  HeartbeatSleepTimeoutMillis:
+    Description: "Parameter to pass value for field HEARTBEAT_SLEEP_TIMEOUT"
+    Type: "Number"
+    Default: 120000
+  HeartbeatFailureRetryInterval:
+    Description: "Parameter to pass value for field IntervalSeconds for heartbeat failure retry"
+    Type: "Number"
+    Default: 60
+  HeartbeatFailureMaxRetries:
+    Description: "Parameter to pass value for field MaxAttempts for heartbeat failure retry"
+    Type: "Number"
+    Default: 3    
+  HeartbeatFailureBackoffRate:
+    Description: "Parameter to pass value for field BackoffRate for heartbeat failure retry"
+    Type: "Number"
+    Default: 4   
+Resources:
+  SftpHostNameParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties: 
+      Name: !Sub <#noparse>"${ParametersPath}/aws/sftp/hostname"</#noparse>
+      Description: "The Sftp hostname"
+      Type: "String"
+      Value: !Ref "SftpHost"
+  SftpUserParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties: 
+      Name: !Sub <#noparse>"${ParametersPath}/aws/sftp/username"</#noparse>
+      Description: "The Sftp server username"
+      Type: "String"
+      Value: !Ref "SftpUser"
+  SftpPortNumberParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties: 
+      Name: !Sub <#noparse>"${ParametersPath}/aws/sftp/port"</#noparse>
+      Description: "The Sftp port number"
+      Type: "String"
+      Value: !Ref "SftpPort"
+  FileRouterWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub <#noparse>"${EnvName}FileRouterWorkflow"</#noparse>
+      DefinitionString: !Sub
+        - | <#include "templates/workflow.json" />
+        - FileRouterBatchArn: !Ref "FileRouterBatchArn"
+          WorkflowTrackingFunctionArn: !Ref "WorkflowTrackingFunctionArn"
+          FileRouterBatchName: !Ref "FileRouterBatchName"
+          FargateClusterId: !Ref "FargateClusterId"
+          FargateSecurityGroupId: !Ref "FargateSecurityGroupId"
+          FargateSubnetId: !Select [0, !Ref "FargateSubnetId"]
+          BatchOutputS3Bucket: !Ref "BatchOutputS3Bucket"
+          TimeoutSeconds: !Ref "TimeoutSeconds"
+          TimeToLiveDays: !Ref "TimeToLiveDays"
+          SftpHost: !GetAtt "SftpHostNameParameter.Value"
+          SftpUser: !GetAtt "SftpUserParameter.Value"
+          SftpPort: !GetAtt "SftpPortNumberParameter.Value"
+          RootLogLevel: !Ref "RootLogLevel"
+          ErpsLogLevel: !Ref "ErpsLogLevel"
+          SubvolPrefix: !Ref "SubvolPrefix"
+          HostedZoneDomainName: !Ref "HostedZoneDomainName"
+          HeartbeatTime: !Ref "HeartbeatTime"
+          HeartbeatSleepTimeoutMillis: !Ref "HeartbeatSleepTimeoutMillis"
+          HeartbeatFailureRetryInterval: !Ref "HeartbeatFailureRetryInterval"
+          HeartbeatFailureMaxRetries: !Ref "HeartbeatFailureMaxRetries"
+          HeartbeatFailureBackoffRate: !Ref "HeartbeatFailureBackoffRate"
+      RoleArn: !Ref WorkflowExecutionRole
+  FileRouterWorkflowParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties: 
+      Name: !Sub <#noparse>"${ParametersPath}/aws/states/file-router-workflow"</#noparse>
+      Description: "The ARN of the File Router workflow"
+      Type: "String"
+      Value: !Ref "FileRouterWorkflow"
